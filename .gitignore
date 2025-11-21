@@ -6,6 +6,10 @@
 !*.py
 !README.md
 
+# 忽略 Jupyter Notebook 文件
+*.ipynb
+.ipynb_checkpoints/
+
 # 递归匹配所有子目录中的.py文件
 !**/*.py
 
