@@ -81,16 +81,15 @@ def run_models(file_path):
 
 # 运行各个模型
 models = [
-    ("./LR/LR.py", "LR模型"),
-    ("./XGBoost/XGBoost.py", "XGBoost模型"),
-    ("./LightGBM/LightGBM.py", "LightGBM模型"),
-    ("./RF/RF.py", "RF模型"),
-    ("./SVM/SVM.py", "SVM模型"),
-    ("./HMM/HMM.py", "HMM模型"),
-    ("./MLP/MLP.py", "MLP模型"),
-    ("./LR_XGBoost/LR_XGBoost权重融合.py", "LR_XGBoost权重融合模型"),
-    ("./LR_XGBoost/LR_XGBoost堆叠融合.py", "LR_XGBoost堆叠融合模型"),
-    ("./LR_XGBoost/LR_XGBoost特征层融合.py", "LR_XGBoost特征层融合模型")
+    ("./models/LR.py", "LR模型"),
+    ("./models/XGBoost.py", "XGBoost模型"),
+    ("./models/LightGBM.py", "LightGBM模型"),
+    ("./models/RF.py", "RF模型"),
+    ("./models/SVM.py", "SVM模型"),
+    ("./models/MLP.py", "MLP模型"),
+    ("./models/LR_XGBoost_weighted.py", "LR_XGBoost权重融合模型"),
+    ("./models/LR_XGBoost_stack.py", "LR_XGBoost堆叠融合模型"),
+    ("./models/LR_XGBoost_feature_level.py", "LR_XGBoost特征层融合模型")
 ]
 
 total_success = 0
