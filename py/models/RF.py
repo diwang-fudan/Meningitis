@@ -3,8 +3,8 @@ import optuna
 import matplotlib.pyplot as plt
 import shap
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_curve, auc, roc_auc_score, confusion_matrix, ConfusionMatrixDisplay
-import xgboost as xgb
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_curve, auc, roc_auc_score
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 import matplotlib as mpl
 from matplotlib import font_manager
@@ -15,12 +15,13 @@ import json
 import numpy as np
 
 pd.set_option('display.max_columns', None)
+
 # 注册中文字体到matplotlib
 font_path = "/System/Library/Fonts/Supplemental/Songti.ttc"
 mpl.font_manager.fontManager.addfont(font_path)
 prop = font_manager.FontProperties(fname=font_path)
 font_name = prop.get_name()
-# print("matplotlib 识别的字体名:", font_name)
+print("matplotlib 识别的字体名:", font_name)
 
 plt.rcParams['font.family'] = font_name
 plt.rcParams['axes.unicode_minus'] = False
@@ -105,55 +106,36 @@ def bootstrap_auc_ci(y_true, y_score, B=1000, seed=2025, return_distribution=Fal
     else:
         return {"point": auc_point, "median": median, "ci95": (lower, upper)}
 
-def train(X_train, y_train, X_val, y_val, key):
+def train(X_train, y_train, X_val, y_val):
     # 定义 Optuna 目标函数
     def objective(trial):
         # 建议超参数范围
         params = {
-            'n_estimators': trial.suggest_int('n_estimators', 10, 200, step=10),
-            'max_depth': trial.suggest_int('max_depth', 2, 10),
-            'learning_rate': trial.suggest_float('learning_rate', 1e-3, 0.3, log=True),
-            'subsample': trial.suggest_float('subsample', 0.6, 1.0),
-            'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0),
-            'reg_alpha': trial.suggest_float('reg_alpha', 1e-8, 10.0, log=True),
-            'reg_lambda': trial.suggest_float('reg_lambda', 1e-8, 10.0, log=True),
-            'min_child_weight': trial.suggest_int('min_child_weight', 1, 10),
-            'gamma': trial.suggest_float('gamma', 0.0, 5.0),
-            'random_state': 42,
-            # 'use_label_encoder': False,
-            'eval_metric': ['auc', 'logloss']
-            # 'scale_pos_weight':
+            'n_estimators': trial.suggest_int('n_estimators', 50, 500, step=50),
+            'max_depth': trial.suggest_int('max_depth', 3, 30),
+            'min_samples_split': trial.suggest_int('min_samples_split', 2, 20),
+            'min_samples_leaf': trial.suggest_int('min_samples_leaf', 1, 10),
+            'max_features': trial.suggest_categorical('max_features', ['sqrt', 'log2', None]),
+            'bootstrap': trial.suggest_categorical('bootstrap', [True, False]),
+            'criterion': trial.suggest_categorical('criterion', ['gini', 'entropy']),
+            'class_weight': trial.suggest_categorical('class_weight', [None, 'balanced', 'balanced_subsample']),
+            'random_state': 42
         }
 
+        # 创建模型
+        model = RandomForestClassifier(**params)
 
-        model = xgb.XGBClassifier(**params)
-        model.fit(X_train, y_train,eval_set=[(X_train, y_train), (X_val, y_val)],  # 加入验证集
-            verbose=False,
-        )
-        evals_result = model.evals_result()
+        # 训练模型
+        model.fit(X_train, y_train)
 
-        train_logloss = evals_result['validation_0']['logloss']
-        val_logloss = evals_result['validation_1']['logloss']
+        # 预测验证集概率
+        y_val_pred_proba = model.predict_proba(X_val)[:, 1]
 
-        train_auc = evals_result['validation_0']['auc']
-        val_auc = evals_result['validation_1']['auc']
+        # 计算 AUC
+        auc_score = roc_auc_score(y_val, y_val_pred_proba)
 
-        context = ""
-
-        for key1, item1 in params.items():
-            if key1 == 'use_label_encoder' or key1 == 'eval_metric':
-                context = f"{context}{key1}:{item1}\n"
-            else:
-                # print(item1)
-                context = f"{context}{key1}:{item1:.3f}\n"
-
-        best_auc = 0
-        for i in range(len(val_auc)):
-            if val_auc[i] > best_auc:
-                best_auc = val_auc[i]
-                params['n_estimators'] = i
-
-        return 1.0 - best_auc
+        # 由于 Optuna 默认最小化目标函数，我们返回 1 - AUC 来最大化 AUC
+        return 1.0 - auc_score
 
     # 创建 Optuna 研究
     study = optuna.create_study(
@@ -181,49 +163,35 @@ def train(X_train, y_train, X_val, y_val, key):
     best_params = best_trial.params
     best_params['random_state'] = 42
 
-    final_model = xgb.XGBClassifier(**best_params)
+    final_model = RandomForestClassifier(**best_params)
     final_model.fit(X_train, y_train)
 
-    return [final_model,best_trial.params,best_params]
+    return [final_model,best_params]
 
 # 在各个数据集上评估最终模型
-def evaluate_model(model, X, y, dataset_name, key):
+def evaluate_model(model, X, y, dataset_name):
     # y_pred = model.predict(X)
     y_pred_proba = model.predict_proba(X)[:, 1]
 
     # 最佳阈值
-    best_thresh, best_f1 = 0.5, 0
-    for thresh in np.arange(0.01, 0.99, 0.01):
+    best_thresh, best_auc = 0.5, 0
+    for thresh in np.arange(0.1, 0.65, 0.05):
         pred_val = (y_pred_proba > thresh).astype(int)
-        f1 = f1_score(y, pred_val)
-        if f1 > best_f1:
-            best_thresh, best_f1 = thresh, f1
+        f1 = roc_auc_score(y, pred_val)
+        if f1 > best_auc:
+            best_thresh, best_auc = thresh, f1
 
-    print(f"最佳阈值: {best_thresh:.2f}，测试集最大f1: {best_f1:.4f}")
-
+    print(f"最佳阈值: {best_thresh:.2f}，测试集最大auc: {best_auc:.4f}")
 
     y_pred = (y_pred_proba >= best_thresh).astype(int)
 
-    # if dataset_name == '测试':
-    #     predict = [[], []]
-    #     y = list(y)
-    #     for i in range(len(y)):
-    #         if y[i] == 0:
-    #             predict[0].append(y_pred_proba[i])
-    #         if y[i] == 1:
-    #             predict[1].append(y_pred_proba[i])
-
-    #     plt.boxplot(predict)
-    #     plt.xticks([1, 2], ['非阴性组', '阴性组'])
-    #     plt.title(key)
-    #     plt.ylabel("可能性")
-    #     plt.show()
 
     accuracy = accuracy_score(y, y_pred)
     precision = precision_score(y, y_pred)
     recall = recall_score(y, y_pred)
     f1 = f1_score(y, y_pred)
     roc_auc = roc_auc_score(y, y_pred_proba)
+
     res_auc = bootstrap_auc_ci(y, y_pred_proba, B=1000, seed=2025)
     print(f"AUC = {res_auc['point']:.3f} "
         f"(95% CI {res_auc['ci95'][0]:.3f}–{res_auc['ci95'][1]:.3f})")
@@ -254,9 +222,9 @@ def draw_result(y_val, y_test, val_results, test_results, key, current_dataset):
     # 计算各数据集的ROC曲线
     fpr_val, tpr_val, thresholds = roc_curve(y_val, val_results['y_pred_proba'])
     fpr_test, tpr_test, thresholds = roc_curve(y_test, test_results['y_pred_proba'])
-
-    roc_data_path = f"../../data/ROC/XGBoost/{key}"
+    roc_data_path = f"../../data/ROC/RF/{key}"
     os.makedirs(roc_data_path, exist_ok=True)
+
     pd.DataFrame({
         "fpr": fpr_test,
         "tpr": tpr_test,
@@ -274,11 +242,11 @@ def draw_result(y_val, y_test, val_results, test_results, key, current_dataset):
     plt.ylim([0.0, 1.05])
     plt.xlabel('False Positive Rate', fontsize=12)
     plt.ylabel('True Positive Rate', fontsize=12)
-    plt.title(f'{key} - XGBoost ROC曲线', fontsize=14, fontweight='bold')
+    plt.title(f'{key} - RF ROC曲线', fontsize=14, fontweight='bold')
     plt.legend(loc="lower right", fontsize=12)
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    roc_pic_path = f"../../images/XGBoost/ROC_AUC/Dataset{current_dataset}"
+    roc_pic_path = f"../../images/RF/ROC_AUC/Dataset{current_dataset}"
     os.makedirs(roc_pic_path, exist_ok=True)
     plt.savefig(f"{roc_pic_path}/{key}ROC-AUC.png", dpi=300, bbox_inches='tight')  # 保存为PNG
     # plt.show()
@@ -286,31 +254,30 @@ def draw_result(y_val, y_test, val_results, test_results, key, current_dataset):
     model = key
     data_to_append = {'val_accuracy':round(val_results['accuracy'],4),'val_precision':round(val_results['precision'],4),'val_recall':round(val_results['recall'],4),'val_f1':round(val_results['f1'],4),'roc_auc_val':round(val_results['auc'],4),'val_CI':val_results['CI'],
                     'test_accuracy':round(test_results['accuracy'],4),'test_precision':round(test_results['precision'],4),'test_recall':round(test_results['recall'],4),'test_f1':round(test_results['f1'],4),'roc_auc_test':round(test_results['auc'],4),'test_CI':test_results['CI']}
-
     # JSON 文件路径
-    json_file = "../../data/model_data/"
+    json_file = "../../data/model_data"
     os.makedirs(json_file, exist_ok=True)
     # 如果文件存在，先读取已有数组，否则初始化为空列表
-    if os.path.exists(f"{json_file}XGboost_data.json"):
-        with open(f"{json_file}XGboost_data.json", "r", encoding="utf-8") as f:
+    
+    if os.path.exists(f"{json_file}/RF_data.json"):
+        with open(f"{json_file}/RF_data.json", "r", encoding="utf-8") as f:
             try:
                 existing_data = json.load(f)
-                if f'XGboost_Dataset{current_dataset}' not in existing_data:
-                    existing_data[f'XGboost_Dataset{current_dataset}'] = {}
+                if f'RF_Dataset{current_dataset}' not in existing_data:
+                    existing_data[f'RF_Dataset{current_dataset}'] = {}
             except json.JSONDecodeError:
-                existing_data = {f'XGboost_Dataset{current_dataset}':{}}
+                existing_data = {f'RF_Dataset{current_dataset}':{}}
     else:
-        existing_data = {f'XGboost_Dataset{current_dataset}':{}}
+        existing_data = {f'RF_Dataset{current_dataset}':{}}
 
     # 追加新的数据
-    existing_data[f'XGboost_Dataset{current_dataset}'][model] = data_to_append
-    print(existing_data)
+    existing_data[f'RF_Dataset{current_dataset}'][model] = data_to_append
+
     # 写回 JSON 文件
-    with open(f"{json_file}XGboost_data.json", "w", encoding="utf-8") as f:
+    with open(f"{json_file}/RF_data.json", "w", encoding="utf-8") as f:
         json.dump(existing_data, f, ensure_ascii=False, indent=4)
 
 def draw_shap(final_model, X_train, X_test, current_dataset, key):
-
     task_trans = {
         "阴性组vs其他": "NG vs Others",
         "感染性脑膜炎vs非感染性脑膜炎": "Infectious Meningitis vs Non-Infectious ",
@@ -324,10 +291,12 @@ def draw_shap(final_model, X_train, X_test, current_dataset, key):
     }
 
     # ---------------- SHAP 分析 -----------------
-    explainer = shap.TreeExplainer(final_model, X_train)
+    explainer = shap.TreeExplainer(final_model)
     shap_values = explainer.shap_values(X_test)
-    shap_matrix = shap_values[1] if isinstance(shap_values, list) else shap_values
-    trans_df = pd.read_excel('../../ipynb/项目英文缩写与全称.xlsx')
+    shap_values = shap_values[:, :, 1]
+    # shap_matrix = shap_values[1] if isinstance(shap_values, list) else shap_values
+
+    trans_df = pd.read_excel('../../py/项目英文缩写与全称.xlsx')
     trans_dict = {}
 
     for index, row in trans_df.iterrows():
@@ -335,100 +304,37 @@ def draw_shap(final_model, X_train, X_test, current_dataset, key):
     # new_index = [x if x in ['age', 'gender'] else "_".join(x.split('_')[:-1]) for x in list(X_test.columns)]
     X_test = X_test.rename(columns={'血_葡萄糖空腹_定量': '血_葡萄糖[空腹]_定量'})
     X_test = X_test.rename(columns={'血_肌酸激酶.MB型质量法_定量': '血_肌酸激酶.MB型[质量法]_定量'})
+    X_test = X_test.rename(columns={'血_细胞CD3-CD19+百分比_定量': '血_细胞.CD3-CD19+百分比_定量'})
+    X_test = X_test.rename(columns={'血_13-β-D-葡聚糖_定量': '血_1,3-β-D-葡聚糖_定量'})
+    X_test = X_test.rename(columns={'血_细胞CD3+CD8+百分比_定量': '血_细胞.CD3+CD8+百分比_定量'})
+    X_test = X_test.rename(columns={'血_细胞CD3+CD4+百分比_定量': '血_细胞.CD3+CD4+百分比_定量'})
+
     X_test.columns = [x if x in ['age', 'gender'] else "_".join(x.split('_')[:-1]) for i, x in enumerate(X_test.columns)]
 
     X_test_en = X_test.rename(columns=trans_dict)
     feature_names_en = list(X_test_en.columns)
 
-    # print(shap_matrix)
     print(f"\n===== SHAP 特征重要性 (柱状图):  =====")
     plt.figure(figsize=(10, 8))
-    plt.title(f"Features' Importance of {task_trans[key]} (Histogram)", fontsize=16, fontweight='bold')
+    plt.title(f"Features' Importance of {task_trans[key]} (Histogram)", fontsize=18, fontweight='bold')
     plt.tight_layout()
-    shap.summary_plot(shap_matrix, X_test, plot_type="bar", show=False, feature_names=feature_names_en)
-    plt.gca().invert_xaxis()
-    shap_path1 = f"../../images/XGBoost/shap/Dataset{current_dataset}"
+    
+    shap.summary_plot(shap_values, X_test, plot_type="bar", show=False, feature_names=feature_names_en)
+    shap_path1 = f"../../images/RF/shap/Dataset{current_dataset}"
     os.makedirs(shap_path1, exist_ok=True)
     plt.savefig(f"{shap_path1}/{key}shap柱状图.png", dpi=300, bbox_inches='tight')  # 保存为PNG
-    # print(f"../../images/XGBoost/shap/Dataset{current_dataset}/{key}shap柱状图.png")
     # plt.show()
+
     plt.figure(figsize=(10, 8))
-    plt.title(f"Features' Importance of {task_trans[key]} (Beeswarm Plot)", fontsize=16, fontweight='bold')
+    plt.title(f"Features' Importance of {task_trans[key]} (Beeswarm Plot)", fontsize=18, fontweight='bold')
     plt.tight_layout()
 
     print(f"\n===== SHAP 特征分布 (蜂群图): =====")
-    shap.summary_plot(shap_matrix, X_test, show=False, feature_names=feature_names_en)
+    max_display = 20
+    h = 0.5 * max_display + 1   
+    shap.summary_plot(shap_values, X_test, show=False, feature_names=feature_names_en, plot_size=(9, h))
     plt.savefig(f"{shap_path1}/{key}shap蜂群图.png", dpi=300, bbox_inches='tight')  # 保存为PNG
     # plt.show()
-    return shap_values
-
-def export_global_shap_importance(shap_values, feature_names, k=10, out_csv="shap_global_top10.csv"):
-    """
-    从 shap_values 计算全局特征重要性（mean(|SHAP|)），导出前 k 个到 CSV。
-    兼容：
-      - 新版：shap_values 为 shap.Explanation（.values 形状可为 (n, d) 或 (n, d, C)）
-      - 旧版：多分类返回 list/tuple，每个元素形状 (n, d) 或 Explanation
-      - 旧版：单输出直接返回 ndarray，形状 (n, d)
-    """
-    def to_array_and_nout(sv):
-        # 统一转为：
-        #   单输出: (n_samples, n_features)
-        #   多输出: (n_samples, n_features, n_outputs)
-        # 规则：只要对象有 .values 属性，就把它当 Explanation 用
-        if hasattr(sv, "values"):
-            arr = np.asarray(sv.values)
-            if arr.ndim == 2:
-                return arr, 1
-            elif arr.ndim == 3:
-                return arr, arr.shape[2]
-            else:
-                raise ValueError(f"Unexpected shap values ndim: {arr.ndim}")
-        # 旧版多分类：list/tuple，每个元素 (n, d) 或 Explanation
-        if isinstance(sv, (list, tuple)):
-            mats = []
-            for x in sv:
-                xv = np.asarray(x.values) if hasattr(x, "values") else np.asarray(x)
-                if xv.ndim != 2:
-                    raise ValueError("Expected each class SHAP as 2D (n, d).")
-                mats.append(xv)
-            arr = np.stack(mats, axis=2)  # (n, d, C)
-            return arr, arr.shape[2]
-        # 旧版单输出：直接 ndarray
-        arr = np.asarray(sv)
-        if arr.ndim == 2:
-            return arr, 1
-        elif arr.ndim == 3:
-            return arr, arr.shape[2]
-        else:
-            raise ValueError("Cannot interpret shap_values input.")
-
-    arr, n_out = to_array_and_nout(shap_values)
-
-    # 计算全局统计
-    if arr.ndim == 2:  # 单输出
-        mean_abs = np.mean(np.abs(arr), axis=0)             # (d,)
-        mean_signed = np.mean(arr, axis=0)                  # (d,)
-        std_abs = np.std(np.abs(arr), axis=0, ddof=0)       # (d,)
-    else:               # 多输出：对样本和输出维都平均
-        mean_abs = np.mean(np.abs(arr), axis=(0, 2))        # (d,)
-        mean_signed = np.mean(arr, axis=(0, 2))             # (d,)
-        std_abs = np.std(np.abs(arr), axis=(0, 2), ddof=0)  # (d,)
-
-    df = pd.DataFrame({
-        "feature": feature_names,
-        "mean_abs_shap": mean_abs,
-        "mean_shap": mean_signed,
-        "std_abs_shap": std_abs
-    }).sort_values("mean_abs_shap", ascending=False, ignore_index=True)
-
-    total = df["mean_abs_shap"].sum()
-    df["importance_pct"] = 0.0 if total == 0 else df["mean_abs_shap"] / total
-    df["cumulative_pct"] = df["importance_pct"].cumsum()
-    df["rank"] = np.arange(1, len(df) + 1)
-
-    topk = df.head(k).copy()
-    topk.to_csv(out_csv, index=False, encoding="utf-8-sig")
-    return topk
 
 def delete_same_col(df):
     same_cols = df.nunique() == 1
@@ -440,7 +346,6 @@ def delete_same_col(df):
     return df.drop(none_feature, axis=1)
 
 def run_model(key, item, selected_df, current_dataset):
-
     # 筛选需要的组别
     selected_df = selected_df[selected_df['分组'].isin(item[0])]
 
@@ -476,20 +381,18 @@ def run_model(key, item, selected_df, current_dataset):
     y_test = pd.concat([y_test_1,y_test_2])
 
     # 得到最优模型
-    result = train(X_train, y_train, X_val, y_val, key)
+    result = train(X_train, y_train, X_val, y_val)
     final_model = result[0]
     # 评估验证集和测试集
-    val_results = evaluate_model(final_model, X_val, y_val, "验证", key)
-    test_results = evaluate_model(final_model, X_test, y_test, "测试", key)
+    val_results = evaluate_model(final_model, X_val, y_val, "验证")
+    test_results = evaluate_model(final_model, X_test, y_test, "测试")
 
     # 绘制ROC——AUC图 并存储数据
     draw_result(y_val, y_test, val_results, test_results, key, current_dataset)
-    feature_names = list(X_train.columns)
-    # 绘制shap图
-    shap_values = draw_shap(final_model, X_train, X_test, current_dataset, key)
-    # export_global_shap_importance(shap_values, feature_names, k=20, out_csv=f"../../data/shap/{key}/Dataset{current_dataset}_shap.csv")
 
-    return result[2]
+    # 绘制shap图
+    draw_shap(final_model, X_train, X_test, current_dataset, key)
+    return result[1]
 
 
 def main(filtered_df, data_path):
@@ -511,11 +414,11 @@ def main(filtered_df, data_path):
         '自身免疫性脑膜炎vs其他': [[0,1,2,3,4,5,6], [6], [0,1,2,3,4,5]],
         '病毒性脑膜炎vs病毒性脑炎': [[2,8], [2], [8]]
         }
-
+    
     if extract_integers(data_path)[-1] == 2:
         selected_features = {
             '阴性组vs其他': filtered_df[['脑脊液_有核细胞计数_定量', '脑脊液_葡萄糖_定量','血_嗜酸性粒细胞百分比_定量','血_葡萄糖空腹_定量','血_结核感染T细胞检测_定性','血_乙型肝炎病毒核心抗体.IgM_定量', '分组', '组名']],
-            '感染性脑膜炎vs非感染性脑膜炎': filtered_df[['脑脊液_单个核细胞百分比_定量','脑脊液_葡萄糖_定量', '脑脊液_激活淋巴细胞_定量','脑脊液_多个核细胞百分比_定量', '分组', '组名']],
+            '细菌性脑膜炎vs其他感染性脑膜炎': filtered_df[['脑脊液_单个核细胞百分比_定量','脑脊液_葡萄糖_定量', '脑脊液_激活淋巴细胞_定量','脑脊液_多个核细胞百分比_定量', '分组', '组名']],
             '细菌性脑膜炎vs其他感染性脑膜炎': filtered_df[['脑脊液_多个核细胞百分比_定量','血_C反应蛋白_定量','脑脊液_有核细胞计数_定量','血_抗凝血酶III_定量','血_血小板分布宽度_定量','血_单核细胞计数_定量', '血_细胞.CD3+CD8+百分比_定量','分组', '组名']],
             '病毒性脑膜炎vs其他感染性脑膜炎': filtered_df[['脑脊液_葡萄糖_定量','脑脊液_中性粒细胞百分比_定量','血_肌酸激酶_定量', '血_肾小球滤过率_定量', '血_免疫球蛋白E_定量','血_细胞.CD3-CD16+CD56+百分比_定量','脑脊液_多个核细胞百分比_定量','脑脊液_蛋白定量_定量','分组', '组名']],
             '结核性脑膜炎vs其他感染性脑膜炎': filtered_df[['血_结核感染T细胞检测_定性','脑脊液_氯_定量','血_结核感染T细胞测试管_定量','脑脊液_葡萄糖_定量','血_淋巴细胞计数_定量','血_血小板分布宽度_定量', '血_铁蛋白_定量', '血_游离T4_定量', '分组', '组名']],
@@ -538,9 +441,10 @@ def main(filtered_df, data_path):
 
 
 if __name__ == "__main__":
+    import os
     # 从环境变量获取dataset，如果没有则使用默认值
-    dataset = os.environ.get('dataset', 'filtered_patient3.csv')
+    dataset = os.environ.get('dataset', 'filtered_patient8.csv')
     data_path = f'../../data/final_data2/{dataset}'
-    # data_path = '../../data/final_data2/filtered_patient3.csv'
+    # data_path = '../../data/final_data2/filtered_patient8.csv'
     filtered_df = pd.read_csv(data_path)
     main(filtered_df, data_path)

@@ -868,7 +868,7 @@ def features_importance_heetmap(task_trans3):
                                     '结核性脑膜炎vs其他感染性脑膜炎': '结核性vs其他感染性', '真菌性脑膜炎vs其他感染性脑膜炎': '真菌性vs其他感染性', '肿瘤性脑膜炎vs其他': '肿瘤性vs其他', '自身免疫性脑膜炎vs其他': '自身免疫性vs其他'})
     df_all_10 = df_all.head(10)
 
-    trans_df = pd.read_excel('../ipynb/项目英文缩写与全称.xlsx')
+    trans_df = pd.read_excel('../py/项目英文缩写与全称.xlsx')
     trans_dict = {}
 
     for index, row in trans_df.iterrows():

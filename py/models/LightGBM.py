@@ -336,7 +336,7 @@ def draw_shap(final_model, X_train, X_test, current_dataset, key):
     shap_values = explainer.shap_values(X_test)
     shap_matrix = shap_values[1] if isinstance(shap_values, list) else shap_values
 
-    trans_df = pd.read_excel('../../ipynb/项目英文缩写与全称.xlsx')
+    trans_df = pd.read_excel('../../py/项目英文缩写与全称.xlsx')
     trans_dict = {}
     print(X_test.columns)
     for index, row in trans_df.iterrows():

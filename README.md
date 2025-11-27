@@ -1,140 +1,177 @@
-# 脑脊液疾病诊断机器学习项目 (Meningitis Diagnosis ML Project)
+# Meningitis Diagnosis Machine Learning Project
 
-## 项目简介 (Project Overview)
-
-本项目专注于使用机器学习算法进行脑脊液相关疾病的诊断和分类。通过分析脑脊液和血液检测数据，构建多种分类模型来辅助医生进行疾病诊断。
+## Project Overview
 
 This project focuses on using machine learning algorithms for the diagnosis and classification of cerebrospinal fluid (CSF) related diseases. By analyzing CSF and blood test data, we build various classification models to assist physicians in disease diagnosis.
 
-## 项目结构 (Project Structure)
+## Project Structure
 
 ```
-├── .gitignore                    # Git忽略文件配置
-├── README.md                     # 项目说明文档
-└── ipynb/                        # 主要代码目录
-    ├── LR/                       # 逻辑回归模型
-    │   └── LR.py
-    ├── LR_XGBoost/               # LR与XGBoost融合模型
-    │   ├── LR_XGBoost堆叠融合.py
-    │   ├── LR_XGBoost权重融合.py
-    │   └── LR_XGBoost特征层融合.py
-    ├── LightGBM/                 # LightGBM模型
-    │   └── LightGBM.py
-    ├── MLP/                      # 多层感知机模型
-    │   └── MLP.py
-    ├── RF/                       # 随机森林模型
-    │   └── RF.py
-    ├── SVM/                      # 支持向量机模型
-    │   └── SVM.py
-    ├── XGBoost/                  # XGBoost模型
-    │   └── XGBoost.py
-    ├── 清洗数据.py                # 数据预处理脚本
-    ├── 特征构造.py                # 特征工程脚本
-    ├── 模型运行.py                # 模型训练和评估主脚本
-    ├── 结果分析.py                # 结果分析和可视化脚本
-    └── 绘制可视化图.py             # 绘图工具脚本
+├── .gitignore                         # Git ignore configuration
+├── README.md                          # Project documentation
+└── py/                                # Main source code directory
+    ├── models/                        # Machine learning models
+    │   ├── LR.py                      # Logistic Regression model
+    │   ├── LR_XGBoost_feature_level.py    # Feature-level fusion of LR & XGBoost
+    │   ├── LR_XGBoost_stack.py            # Stacking fusion of LR & XGBoost
+    │   ├── LR_XGBoost_weighted.py         # Weighted fusion of LR & XGBoost
+    │   ├── LightGBM.py               # LightGBM model
+    │   ├── MLP.py                    # Multi-Layer Perceptron model
+    │   ├── RF.py                     # Random Forest model
+    │   ├── SVM.py                    # Support Vector Machine model
+    │   └── XGBoost.py                # XGBoost model
+    ├── analyse_result.py              # Results analysis and evaluation script
+    ├── data_cleansing.py             # Data preprocessing script
+    ├── feature_construction.py       # Feature engineering script
+    ├── run_models.py                 # Main model training and evaluation script
+    └── visualization.py             # Data visualization and plotting script
 ```
 
-## 主要算法模型 (Main Algorithm Models)
+## Main Algorithm Models
 
-### 单一模型 (Single Models)
-- **LR (Logistic Regression)** - 逻辑回归分类器
-- **SVM (Support Vector Machine)** - 支持向量机分类器
-- **RF (Random Forest)** - 随机森林集成学习
-- **LightGBM** - 梯度提升决策树框架
-- **MLP (Multi-Layer Perceptron)** - 多层感知机神经网络
-- **XGBoost** - 极端梯度提升算法
+### Single Models
+- **LR (Logistic Regression)** - Linear classification model for binary/multi-class problems
+- **SVM (Support Vector Machine)** - Kernel-based classification with maximum margin
+- **RF (Random Forest)** - Ensemble learning with multiple decision trees
+- **LightGBM** - Gradient boosting framework with leaf-wise growth strategy
+- **MLP (Multi-Layer Perceptron)** - Feedforward neural network with multiple hidden layers
+- **XGBoost** - Extreme gradient boosting with regularized objectives
 
-### 融合模型 (Ensemble Models)
-- **LR_XGBoost堆叠融合** - 基于堆叠策略的LR与XGBoost融合
-- **LR_XGBoost权重融合** - 基于权重分配的LR与XGBoost融合
-- **LR_XGBoost特征层融合** - 基于特征层面的LR与XGBoost融合
+### Ensemble Models
+- **LR_XGBoost_feature_level** - Feature-level fusion combining LR and XGBoost predictions
+- **LR_XGBoost_stack** - Stacking ensemble using LR as meta-learner on XGBoost outputs
+- **LR_XGBoost_weighted** - Weighted ensemble combining LR and XGBoost predictions
 
-## 技术栈 (Technology Stack)
+## Technology Stack
 
-### 核心库 (Core Libraries)
-- `pandas` - 数据处理和分析
-- `numpy` - 数值计算
-- `scikit-learn` - 机器学习基础库
-- `matplotlib` & `seaborn` - 数据可视化
-- `optuna` - 超参数优化
+### Core Libraries
+- `pandas` - Data manipulation and analysis
+- `numpy` - Numerical computing and array operations
+- `scikit-learn` - Machine learning fundamentals and utilities
+- `matplotlib` & `seaborn` - Data visualization and plotting
+- `optuna` - Hyperparameter optimization framework
+- `shap` - Model interpretation and explainability
 
-### 机器学习框架 (ML Frameworks)
-- `xgboost` - XGBoost算法实现
-- `lightgbm` - LightGBM算法实现
+### Machine Learning Frameworks
+- `xgboost` - XGBoost algorithm implementation
+- `lightgbm` - LightGBM algorithm implementation
 
-### 特性 (Features)
-- **超参数优化**: 使用Optuna进行自动调优
-- **模型解释**: 集成SHAP值分析
-- **中文支持**: 配置matplotlib中文字体显示
-- **结果可视化**: 生成ROC曲线、混淆矩阵等评估图表
+### Key Features
+- **Hyperparameter Optimization**: Automated tuning using Optuna
+- **Model Interpretability**: SHAP values for model explanation
+- **Multi-language Support**: Chinese font configuration for matplotlib
+- **Comprehensive Visualization**: ROC curves, confusion matrices, and performance metrics
 
-## 数据处理流程 (Data Processing Pipeline)
+## Data Processing Pipeline
 
-1. **数据清洗** (`清洗数据.py`)
-   - 缺失值处理
-   - 异常值检测和处理
-   - 数据类型转换
+### 1. Data Cleansing (`data_cleansing.py`)
+- Missing value handling and imputation
+- Outlier detection and treatment
+- Data type conversion and validation
+- Data quality assessment
 
-2. **特征构造** (`特征构造.py`)
-   - 特征工程和变换
-   - 特征选择和降维
+### 2. Feature Engineering (`feature_construction.py`)
+- Feature transformation and generation
+- Feature selection and dimensionality reduction
+- Wide format data construction from clinical measurements
+- Temporal feature extraction from longitudinal data
 
-3. **模型训练** (`模型运行.py`)
-   - 多种算法的训练和调优
-   - 交叉验证和模型选择
+### 3. Model Training (`run_models.py`)
+- Multi-algorithm training pipeline
+- Cross-validation and hyperparameter optimization
+- Model comparison and selection
+- Performance evaluation and benchmarking
 
-4. **结果分析** (`结果分析.py`, `绘制可视化图.py`)
-   - 模型性能评估
-   - 可视化分析
-   - 结果对比和报告
+### 4. Results Analysis (`analyse_result.py`, `visualization.py`)
+- Comprehensive model performance evaluation
+- Statistical analysis and significance testing
+- Visualization of results and model interpretations
+- Report generation and comparative analysis
 
-## 模型评估指标 (Model Evaluation Metrics)
+## Model Evaluation Metrics
 
-- 准确率 (Accuracy)
-- 精确率 (Precision)
-- 召回率 (Recall)
-- F1分数 (F1-Score)
-- ROC曲线下面积 (AUC-ROC)
-- 混淆矩阵 (Confusion Matrix)
+- **Accuracy** - Overall classification correctness
+- **Precision** - Positive predictive value
+- **Recall** - Sensitivity or true positive rate
+- **F1-Score** - Harmonic mean of precision and recall
+- **ROC-AUC** - Area under the receiver operating characteristic curve
+- **Confusion Matrix** - Detailed classification performance breakdown
 
-## 使用说明 (Usage)
+## Usage
 
-### 环境要求 (Requirements)
+### Requirements
+
 ```bash
 pip install pandas numpy scikit-learn matplotlib seaborn
 pip install xgboost lightgbm optuna shap
 ```
 
-### 运行流程 (Run Pipeline)
-1. 运行 `python 清洗数据.py` 进行数据预处理
-2. 运行 `python 特征构造.py` 进行特征工程
-3. 运行 `python 模型运行.py` 训练和评估模型
-4. 运行 `python 结果分析.py` 和 `python 绘制可视化图.py` 分析结果
+### Running the Pipeline
 
-## 项目特色 (Project Highlights)
+1. **Data Preprocessing**
+   ```bash
+   python py/data_cleansing.py
+   ```
 
-- 🏥 **医疗应用导向**: 专注于脑脊液疾病的临床辅助诊断
-- 🤖 **多算法集成**: 涵盖6种主流机器学习算法及多种融合策略
-- 📊 **完整流程**: 从数据预处理到结果可视化的端到端解决方案
-- 🎯 **性能优化**: 使用Optuna进行超参数自动优化
-- 🌟 **模型解释**: 集成SHAP值提供模型决策解释
-- 🇨🇳 **本地化支持**: 完整的中文数据可视化支持
+2. **Feature Engineering**
+   ```bash
+   python py/feature_construction.py
+   ```
 
-## 贡献指南 (Contributing)
+3. **Model Training and Evaluation**
+   ```bash
+   python py/run_models.py
+   ```
 
-欢迎提交Issue和Pull Request来改进本项目。
+4. **Results Analysis and Visualization**
+   ```bash
+   python py/analyse_result.py
+   python py/visualization.py
+   ```
 
-## 许可证 (License)
+## Project Highlights
 
-请查看LICENSE文件了解项目许可信息。
+- 🏥 **Medical Application Focus**: Specialized for CSF disease diagnosis and clinical decision support
+- 🤖 **Multi-Algorithm Integration**: Comprehensive coverage of 6 mainstream ML algorithms and ensemble strategies
+- 📊 **End-to-End Solution**: Complete pipeline from data preprocessing to result visualization
+- 🎯 **Performance Optimization**: Automated hyperparameter tuning with Optuna
+- 🌟 **Model Interpretability**: Integrated SHAP analysis for model decision explanation
+- 🔬 **Clinical Data Handling**: Specialized processing for medical laboratory data and patient records
 
-## 联系方式 (Contact)
+## Dataset Information
 
-如有问题或建议，请通过以下方式联系：
-- 项目维护者: diwang-fudan
-- 邮箱: d_wang@fudan.edu.cn
+The project processes clinical laboratory data including:
+- **Cerebrospinal Fluid (CSF)** measurements
+- **Blood test results** and biochemical markers
+- **Patient demographic information**
+- **Temporal measurement data** for longitudinal analysis
+
+## Model Performance
+
+The models are evaluated using comprehensive metrics and compared across:
+- Different disease categories
+- Various feature subsets
+- Multiple performance thresholds
+- Cross-validation scenarios
+
+## Contributing
+
+We welcome contributions through Issues and Pull Requests. Please ensure:
+- Code follows Python best practices
+- Documentation is updated
+- Tests are included for new features
+- Clinical considerations are respected
+
+## License
+
+Please refer to the LICENSE file for detailed licensing information.
+
+## Contact
+
+For questions, suggestions, or collaborations:
+- **Maintainer**: diwang-fudan
+- **Email**: d_wang@fudan.edu.cn
 
 ---
 
-**注意**: 本项目仅用于研究和教学目的，不作为临床诊断的唯一依据。实际临床应用请结合专业医生判断。
+**Disclaimer**: This project is intended for research and educational purposes only and should not be used as the sole basis for clinical diagnosis. Always consult qualified medical professionals for clinical decision-making.
